@@ -91,6 +91,21 @@ h3{font-size:1.05rem;margin:22px 0 8px;font-weight:600}
 .qopt:disabled{color:var(--ink);opacity:1;cursor:default}
 .qopt.good{border-color:var(--net);background:var(--net-bg)}
 .qopt.bad{border-color:var(--err)}
+.cfields.g2 label.wide{grid-column:1/-1}
+.cfields textarea{line-height:1.45;overflow:hidden}
+.sig{display:block;width:100%;height:auto;aspect-ratio:3/1;border:1.5px solid var(--line);border-radius:8px;background:#fff;touch-action:none;cursor:crosshair}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.btn.alt{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+#fs-msg{color:var(--muted);font-size:.85rem;margin:10px 0 0}
+@page{margin:12mm}
+@media print{
+  body{background:#fff;color:#000}
+  body.print-fiche main > :not(#fiche){display:none !important}
+  body.print-fiche .noprint{display:none !important}
+  #fiche{margin:0;padding:0;border:0}
+  #fiche h2,#fiche label{color:#000}
+  #fiche input,#fiche textarea,#fiche select{border:1px solid #888;background:#fff;color:#000;box-shadow:none}
+}
 #f-err,#r-err,#d-err,#w-err,#k-e1,#k-e2{color:var(--err);min-height:1.5em;margin:8px 0}
 .verdict{font-weight:600}.ok{color:var(--net)}.ko{color:var(--err)}.mid{color:var(--host)}
 </style>
@@ -248,6 +263,34 @@ Liaison WAN 2</textarea></label>
     </div>
     <button type="button" class="btn" id="q-restart">Nouveau quiz</button>
     <div id="q-box"></div>
+  </section>
+  <section class="conv" id="fiche">
+    <h2>Fiche d’intervention</h2>
+    <p class="lead noprint">Remplissez la fiche sur le terrain : elle est enregistrée automatiquement sur cet appareil. Le bouton PDF ouvre l’impression ; choisissez « Enregistrer au format PDF ».</p>
+    <div class="cfields g2">
+      <label>N° de ticket ou référence<input data-f="ticket" autocomplete="off"></label>
+      <label>Date et heure<input type="datetime-local" id="fi-date" data-f="date"></label>
+      <label>Technicien<input data-f="tech" autocomplete="off"></label>
+      <label>Client ou site<input data-f="client" autocomplete="off"></label>
+      <label class="wide">Adresse ou localisation<input data-f="lieu" autocomplete="off"></label>
+      <label>Type d’intervention<select data-f="type"><option>Installation</option><option>Mise en service</option><option>Maintenance préventive</option><option>Dépannage</option><option>Contrôle et mesures</option></select></label>
+      <label>Statut<select data-f="statut"><option>Terminée</option><option>En cours</option><option>À suivre</option></select></label>
+      <label class="wide">Équipements concernés (marque, modèle, n° de série)<textarea rows="3" data-f="equip"></textarea></label>
+      <label class="wide">Problème constaté ou demande<textarea rows="3" data-f="probleme"></textarea></label>
+      <label class="wide">Travaux réalisés<textarea rows="4" data-f="travaux"></textarea></label>
+      <label class="wide">Mesures relevées (ex. puissance reçue −18,5 dBm)<textarea rows="3" data-f="mesures"></textarea></label>
+      <label class="wide">Matériel utilisé<textarea rows="2" data-f="materiel"></textarea></label>
+      <label>Temps passé (heures)<input data-f="duree" autocomplete="off"></label>
+      <label>Nom du client signataire<input data-f="signataire" autocomplete="off"></label>
+      <label class="wide">Observations et suite à donner<textarea rows="3" data-f="suite"></textarea></label>
+      <label class="wide">Signature du client<canvas id="fi-sig" class="sig" width="600" height="200"></canvas></label>
+    </div>
+    <div class="actions noprint">
+      <button type="button" class="btn" id="fi-pdf">Enregistrer en PDF</button>
+      <button type="button" class="btn alt" id="fi-sigclear">Effacer la signature</button>
+      <button type="button" class="btn alt" id="fi-new">Nouvelle fiche</button>
+    </div>
+    <p id="fs-msg" class="noprint"></p>
   </section>
 </main>
 
@@ -783,6 +826,90 @@ function quizAnswer(k) {
 $('q-restart').addEventListener('click', quizStart);
 $('q-lvl').addEventListener('change', quizStart);
 quizStart();
+
+// Fiche d’intervention : enregistrement automatique, signature et export PDF (impression)
+function initFiche() {
+  const KEY = 'fiche-intervention-v1';
+  const fields = () => [...document.querySelectorAll('#fiche [data-f]')];
+  const cv = $('fi-sig'), cx = cv.getContext('2d');
+  let drawing = false, signed = false;
+
+  const pad = n => String(n).padStart(2, '0');
+  const nowLocal = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; };   // la zone s’agrandit avec le texte
+
+  function sigClear() {
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+    cx.lineWidth = 3; cx.lineCap = 'round'; cx.lineJoin = 'round'; cx.strokeStyle = '#000';
+    signed = false;
+  }
+
+  function save() {
+    const msg = $('fs-msg');
+    try {
+      const o = {};
+      fields().forEach(el => { o[el.dataset.f] = el.value; });
+      o._sig = signed ? cv.toDataURL() : '';
+      localStorage.setItem(KEY, JSON.stringify(o));
+      msg.textContent = 'Brouillon enregistré sur cet appareil.';
+    } catch (e) {
+      msg.textContent = 'Enregistrement automatique indisponible sur ce navigateur.';
+    }
+  }
+
+  function load() {
+    let o = {};
+    try { o = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { o = {}; }
+    fields().forEach(el => { if (typeof o[el.dataset.f] === 'string') el.value = o[el.dataset.f]; });
+    if (!$('fi-date').value) $('fi-date').value = nowLocal();
+    fields().forEach(el => { if (el.tagName === 'TEXTAREA') grow(el); });
+    if (o._sig) {
+      const img = new Image();
+      img.onload = () => { cx.drawImage(img, 0, 0); signed = true; };
+      img.src = o._sig;
+    }
+  }
+
+  // Signature au doigt ou à la souris
+  const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+  cv.addEventListener('pointerdown', e => {
+    drawing = true; signed = true; cv.setPointerCapture(e.pointerId);
+    const [x, y] = pos(e); cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x + 0.1, y + 0.1); cx.stroke();
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', e => { if (!drawing) return; const [x, y] = pos(e); cx.lineTo(x, y); cx.stroke(); });
+  ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { if (drawing) { drawing = false; save(); } }));
+  $('fi-sigclear').addEventListener('click', () => { sigClear(); save(); });
+
+  fields().forEach(el => {
+    el.addEventListener('input', () => { if (el.tagName === 'TEXTAREA') grow(el); save(); });
+  });
+
+  // Export PDF : on n’imprime que la fiche, et le titre sert de nom de fichier
+  $('fi-pdf').addEventListener('click', () => {
+    const old = document.title;
+    const t = document.querySelector('#fiche [data-f="ticket"]').value.trim();
+    document.title = 'Fiche d’intervention' + (t ? ' ' + t : '');
+    document.body.classList.add('print-fiche');
+    fields().forEach(el => { if (el.tagName === 'TEXTAREA') grow(el); });
+    const done = () => { document.body.classList.remove('print-fiche'); document.title = old; };
+    window.addEventListener('afterprint', done, { once: true });
+    window.print();
+  });
+
+  $('fi-new').addEventListener('click', () => {
+    if (!confirm('Effacer la fiche actuelle et en commencer une nouvelle ?')) return;
+    fields().forEach(el => { el.value = el.tagName === 'SELECT' ? el.options[0].value : ''; el.style.height = ''; });
+    $('fi-date').value = nowLocal();
+    sigClear();
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    $('fs-msg').textContent = 'Nouvelle fiche prête.';
+  });
+
+  sigClear();
+  load();
+}
+try { initFiche(); } catch (e) { console.error('Fiche d’intervention :', e); }
 
 $('ip').addEventListener('input', calculate);
 $('mask').addEventListener('input', calculate);
