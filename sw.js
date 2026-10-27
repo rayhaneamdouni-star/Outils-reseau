@@ -1,7 +1,7 @@
 // Service worker : permet d'ouvrir l'application sans connexion.
 // Pour publier une mise à jour, changez v1 en v2 (puis v3, etc.).
-const CACHE = 'outils-reseau-v7';
-const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const CACHE = 'outils-reseau-v8';
+const CORE = ['./', './index.html', './manifest.json', './lang-en.js', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));

@@ -107,6 +107,9 @@ h3{font-size:1.05rem;margin:22px 0 8px;font-weight:600}
   #fiche h2,#fiche label{color:#000}
   #fiche input,#fiche textarea,#fiche select{border:1px solid #888;background:#fff;color:#000;box-shadow:none}
 }
+#langbar{display:flex;gap:6px;margin:0 0 10px}
+#langbar button{font:600 .8rem "IBM Plex Sans",system-ui,sans-serif;padding:4px 12px;border:1.5px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);cursor:pointer}
+#langbar button[aria-pressed="true"]{background:var(--net);color:var(--surface);border-color:var(--net)}
 #menu{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px;margin:0 0 8px}
 #menu button{flex:0 0 auto;font:600 .85rem "IBM Plex Sans",system-ui,sans-serif;padding:8px 12px;border:1.5px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap}
 #menu button[aria-current="page"]{background:var(--net);color:var(--surface);border-color:var(--net)}
@@ -129,6 +132,7 @@ h3{font-size:1.05rem;margin:22px 0 8px;font-weight:600}
 <body>
 <main>
   <h1>Outils réseau</h1>
+  <div id="langbar" role="group" aria-label="Langue"><button type="button" data-lang="fr" aria-pressed="true">FR</button><button type="button" data-lang="en" aria-pressed="false">EN</button></div>
   <nav id="menu" aria-label="Outils" hidden></nav>
   <section id="home"><p class="lead">Choisissez un outil. Tout fonctionne sans connexion une fois l’application installée.</p><div id="home-grid"></div></section>
   <div class="conv tool" id="t-subnet">
@@ -319,6 +323,7 @@ Liaison WAN 2</textarea></label>
   </section>
 </main>
 
+<script src="lang-en.js"></script>
 <script>
 // Raccourci pour récupérer un élément de la page par son id
 const $ = id => document.getElementById(id);
@@ -852,6 +857,8 @@ $('q-restart').addEventListener('click', quizStart);
 $('q-lvl').addEventListener('change', quizStart);
 quizStart();
 
+let L = s => s;   // traduction des messages du code (remplacée par initLang)
+
 // Fiches d’intervention : plusieurs fiches, photos, signature et export PDF
 function initFiche() {
   const KEY = 'fiches-v2', OLD = 'fiche-intervention-v1', MAXP = 8;
@@ -971,7 +978,7 @@ function initFiche() {
   $('fi-list').addEventListener('change', e => { apply(e.target.value); persist(); });
   $('fi-new').addEventListener('click', () => { collect(); apply(create()); persist(); msg('Nouvelle fiche créée.'); });
   $('fi-del').addEventListener('click', () => {
-    if (!confirm('Supprimer définitivement cette fiche ?')) return;
+    if (!confirm(L('Supprimer définitivement cette fiche ?'))) return;
     delete db.items[db.cur];
     if (!Object.keys(db.items).length) db.cur = create(); else db.cur = latest();
     apply(db.cur); persist(); msg('Fiche supprimée.');
@@ -1039,6 +1046,66 @@ function initMenu() {
   showTool(fromHash());
 }
 try { initMenu(); } catch (e) { console.error('Menu :', e); }
+
+// Langues : le français est la langue d’origine ; les autres sont traduites à la volée
+function initLang() {
+  const packs = { en: window.I18N_EN };
+  let lang = 'fr', pack = null;
+  const seen = new WeakMap();
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const skip = n => /^(SCRIPT|STYLE|TEXTAREA)$/.test(n.parentNode ? n.parentNode.nodeName : '');
+  const texts = root => {
+    if (root.nodeType === 3) return [root];
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), a = [];
+    while (w.nextNode()) a.push(w.currentNode);
+    return a;
+  };
+  const conv = s => {
+    if (own(pack.dict, s)) return pack.dict[s];
+    for (const [re, rep] of pack.pat) if (re.test(s)) return pack.num(s.replace(re, rep));
+    return pack.num(s);
+  };
+  const apply = n => {
+    const cur = n.nodeValue, t = cur.trim();
+    if (!t || skip(n)) return;
+    const s = seen.get(n);
+    if (s && s.en === cur) return;
+    const out = cur.replace(t, () => conv(t));
+    if (out !== cur) { seen.set(n, { fr: cur, en: out }); n.nodeValue = out; }
+  };
+  const obs = new MutationObserver(recs => recs.forEach(r => {
+    if (r.type === 'characterData') apply(r.target);
+    else r.addedNodes.forEach(n => { if (n.nodeType === 3 || n.nodeType === 1) texts(n).forEach(apply); });
+  }));
+  const attrs = back => document.querySelectorAll('[aria-label]').forEach(el => {
+    if (!el.dataset.fr) el.dataset.fr = el.getAttribute('aria-label');
+    el.setAttribute('aria-label', back ? el.dataset.fr : conv(el.dataset.fr));
+  });
+
+  function setLang(l) {
+    obs.disconnect();
+    if (l === 'fr' || !packs[l]) {
+      lang = 'fr';
+      texts(document.documentElement).forEach(n => { const s = seen.get(n); if (s && n.nodeValue === s.en) n.nodeValue = s.fr; seen.delete(n); });
+      attrs(true);
+    } else {
+      lang = l; pack = packs[l];
+      texts(document.documentElement).forEach(apply);
+      attrs(false);
+      obs.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    }
+    document.documentElement.lang = lang;
+    L = s => lang === 'fr' ? s : conv(s);
+    document.querySelectorAll('#langbar button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+    try { localStorage.setItem('lang', lang); } catch (e) {}
+  }
+
+  document.querySelectorAll('#langbar button').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
+  let saved = 'fr';
+  try { saved = localStorage.getItem('lang') || 'fr'; } catch (e) {}
+  if (saved !== 'fr') setLang(saved);
+}
+try { initLang(); } catch (e) { console.error('Langue :', e); }
 
 
 $('ip').addEventListener('input', calculate);
