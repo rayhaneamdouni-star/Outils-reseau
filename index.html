@@ -82,7 +82,8 @@ textarea:focus-visible{outline:2px solid var(--net);outline-offset:1px}
 select{font:600 1rem "IBM Plex Mono",ui-monospace,Consolas,monospace;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:0}
 select:focus-visible{outline:2px solid var(--net);outline-offset:1px}
 @media (min-width:480px){.cfields.g2{grid-template-columns:1fr 1fr}}
-#f-err,#r-err{color:var(--err);min-height:1.5em;margin:8px 0}
+h3{font-size:1.05rem;margin:22px 0 8px;font-weight:600}
+#f-err,#r-err,#d-err{color:var(--err);min-height:1.5em;margin:8px 0}
 .verdict{font-weight:600}.ok{color:var(--net)}.ko{color:var(--err)}.mid{color:var(--host)}
 </style>
 </head>
@@ -165,6 +166,28 @@ Liaison WAN 2</textarea></label>
     </div>
     <p id="r-err" role="alert"></p>
     <div id="r-out"></div>
+  </section>
+  <section class="conv" id="dbm">
+    <h2>Conversion dBm, mW et dB</h2>
+    <p class="lead">Modifiez un champ, les autres se mettent à jour. Repères : 0 dBm = 1 mW, 30 dBm = 1 W, +3 dB ≈ ×2, +10 dB = ×10.</p>
+    <h3>Puissance : dBm, mW, W</h3>
+    <div class="cfields g2">
+      <label>dBm<input id="d-dbm" value="20" autocomplete="off" spellcheck="false"></label>
+      <label>mW<input id="d-mw" autocomplete="off" spellcheck="false"></label>
+      <label>W<input id="d-w" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <h3>Gain ou perte : dB et rapport de puissance</h3>
+    <div class="cfields g2">
+      <label>dB<input id="d-db" value="3" autocomplete="off" spellcheck="false"></label>
+      <label>Rapport (×)<input id="d-ratio" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <h3>Niveau de sortie après un gain ou une perte</h3>
+    <div class="cfields g2">
+      <label>Niveau d’entrée (dBm)<input id="d-in" value="0" autocomplete="off" spellcheck="false"></label>
+      <label>Gain (dB), négatif pour une perte<input id="d-gain" value="-3" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p id="d-err" role="alert"></p>
+    <div id="d-out"></div>
   </section>
 </main>
 
@@ -465,6 +488,49 @@ $('f-wl').addEventListener('change', () => { $('f-att').value = $('f-wl').value;
 document.querySelectorAll('#radio input').forEach(el => el.addEventListener('input', radio));
 fibre();
 radio();
+
+// Conversions dBm / mW / W et dB / rapport
+const sig = x => Number(x.toPrecision(6)).toString();   // nombre lisible (6 chiffres significatifs)
+
+const toDbm = {
+  'd-dbm': v => v,
+  'd-mw': v => 10 * Math.log10(v),
+  'd-w': v => 10 * Math.log10(v * 1000),
+};
+Object.keys(toDbm).forEach(id => $(id).addEventListener('input', () => {
+  const v = num(id), err = $('d-err');
+  if (Number.isNaN(v) || (id !== 'd-dbm' && v <= 0)) { err.textContent = 'Entrez un nombre (supérieur à 0 pour mW et W).'; return; }
+  err.textContent = '';
+  const dbm = toDbm[id](v), mw = 10 ** (dbm / 10);
+  if (id !== 'd-dbm') $('d-dbm').value = sig(dbm);
+  if (id !== 'd-mw') $('d-mw').value = sig(mw);
+  if (id !== 'd-w') $('d-w').value = sig(mw / 1000);
+}));
+
+const toDb = { 'd-db': v => v, 'd-ratio': v => 10 * Math.log10(v) };
+Object.keys(toDb).forEach(id => $(id).addEventListener('input', () => {
+  const v = num(id), err = $('d-err');
+  if (Number.isNaN(v) || (id === 'd-ratio' && v <= 0)) { err.textContent = 'Entrez un nombre (supérieur à 0 pour le rapport).'; return; }
+  err.textContent = '';
+  const db = toDb[id](v);
+  if (id !== 'd-db') $('d-db').value = sig(db);
+  if (id !== 'd-ratio') $('d-ratio').value = sig(10 ** (db / 10));
+}));
+
+function level() {
+  const a = num('d-in'), g = num('d-gain');
+  if (Number.isNaN(a) || Number.isNaN(g)) { $('d-out').innerHTML = ''; return; }
+  const o = a + g;   // en dB, gains et pertes s’additionnent simplement
+  $('d-out').innerHTML = kvs([
+    ['Niveau de sortie', r1(o) + ' dBm'],
+    ['Puissance de sortie', sig(10 ** (o / 10)) + ' mW'],
+  ]);
+}
+$('d-in').addEventListener('input', level);
+$('d-gain').addEventListener('input', level);
+$('d-dbm').dispatchEvent(new Event('input'));
+$('d-db').dispatchEvent(new Event('input'));
+level();
 
 $('ip').addEventListener('input', calculate);
 $('mask').addEventListener('input', calculate);
