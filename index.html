@@ -62,6 +62,20 @@ input:focus-visible,.chips button:focus-visible{outline:2px solid var(--net);out
 .kv span{color:var(--muted)}
 .kv b{font:600 1rem "IBM Plex Mono",ui-monospace,Consolas,monospace;text-align:right;overflow-wrap:anywhere}
 .note{color:var(--muted);font-size:.9rem;margin-top:14px}
+.conv{margin-top:40px;padding-top:24px;border-top:1px solid var(--line)}
+.conv h2{font-size:1.3rem;line-height:1.2;margin:0 0 6px;font-weight:600}
+.cfields{display:grid;gap:12px}
+#c-bin{font-size:.85rem}
+@media (min-width:480px){#c-bin{font-size:1.05rem}}
+#c-err{color:var(--err);min-height:1.5em;margin:8px 0}
+textarea{font:600 1rem "IBM Plex Mono",ui-monospace,Consolas,monospace;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:0;resize:vertical;line-height:1.5}
+textarea:focus-visible{outline:2px solid var(--net);outline-offset:1px}
+#v-err{color:var(--err);min-height:1.5em;margin:8px 0}
+select{font:600 1rem "IBM Plex Mono",ui-monospace,Consolas,monospace;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:0}
+select:focus-visible{outline:2px solid var(--net);outline-offset:1px}
+@media (min-width:480px){.cfields.g2{grid-template-columns:1fr 1fr}}
+#f-err,#r-err{color:var(--err);min-height:1.5em;margin:8px 0}
+.verdict{font-weight:600}.ok{color:var(--net)}.ko{color:var(--err)}.mid{color:var(--host)}
 </style>
 </head>
 <body>
@@ -86,6 +100,63 @@ input:focus-visible,.chips button:focus-visible{outline:2px solid var(--net);out
     <div class="bits" id="bits"></div>
     <div class="res" id="res"></div>
     <p class="note" id="note"></p>
+  </section>
+  <section class="conv">
+    <h2>Convertisseur</h2>
+    <p class="lead">Modifiez un champ, les autres se mettent à jour. Valeurs de 0 à 4 294 967 295 (32 bits).</p>
+    <div class="cfields">
+      <label>Décimal<input id="c-dec" inputmode="numeric" autocomplete="off" spellcheck="false"></label>
+      <label>Binaire (32 bits)<input id="c-bin" autocomplete="off" spellcheck="false"></label>
+      <label>Hexadécimal<input id="c-hex" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label>Adresse IPv4<input id="c-ip" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p id="c-err" role="alert"></p>
+  </section>
+  <section class="conv">
+    <h2>Découpage en sous-réseaux (VLSM)</h2>
+    <p class="lead">Indiquez le réseau à découper, puis un sous-réseau par ligne : un nom suivi du nombre d’hôtes, toujours en dernier.</p>
+    <div class="cfields">
+      <label>Réseau de départ<input id="v-net" value="192.168.10.0/24" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label>Sous-réseaux souhaités<textarea id="v-req" rows="5" spellcheck="false">Administration 50
+Invités 25
+Serveurs 10
+Liaison WAN 2</textarea></label>
+    </div>
+    <p id="v-err" role="alert"></p>
+    <div id="v-out"></div>
+  </section>
+  <section class="conv" id="fibre">
+    <h2>Bilan de liaison : fibre optique</h2>
+    <p class="lead">Calcule la puissance reçue, la marge et la distance maximale. Pertes comptées : 0,1 dB par épissure et 0,5 dB par connecteur.</p>
+    <div class="cfields g2">
+      <label>Longueur d’onde<select id="f-wl"><option value="0.35">1310 nm (0,35 dB/km)</option><option value="0.22">1550 nm (0,22 dB/km)</option><option value="3">850 nm multimode (3 dB/km)</option></select></label>
+      <label>Atténuation de la fibre (dB/km)<input id="f-att" value="0.35" autocomplete="off" spellcheck="false"></label>
+      <label>Puissance d’émission (dBm)<input id="f-ptx" value="-3" autocomplete="off" spellcheck="false"></label>
+      <label>Sensibilité du récepteur (dBm)<input id="f-sens" value="-20" autocomplete="off" spellcheck="false"></label>
+      <label>Longueur de la liaison (km)<input id="f-len" value="10" autocomplete="off" spellcheck="false"></label>
+      <label>Nombre d’épissures<input id="f-spl" value="4" autocomplete="off" spellcheck="false"></label>
+      <label>Nombre de connecteurs<input id="f-con" value="2" autocomplete="off" spellcheck="false"></label>
+      <label>Marge de sécurité (dB)<input id="f-mrg" value="3" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p id="f-err" role="alert"></p>
+    <div id="f-out"></div>
+  </section>
+
+  <section class="conv" id="radio">
+    <h2>Bilan de liaison : radio / faisceau hertzien</h2>
+    <p class="lead">Calcul en espace libre, avec zone de Fresnel. Pour un vrai dimensionnement, ajoutez la pluie, la réfraction et la disponibilité visée (recommandations UIT-R).</p>
+    <div class="cfields g2">
+      <label>Fréquence (GHz)<input id="r-f" value="15" autocomplete="off" spellcheck="false"></label>
+      <label>Distance (km)<input id="r-d" value="10" autocomplete="off" spellcheck="false"></label>
+      <label>Puissance d’émission (dBm)<input id="r-ptx" value="20" autocomplete="off" spellcheck="false"></label>
+      <label>Sensibilité du récepteur (dBm)<input id="r-sens" value="-80" autocomplete="off" spellcheck="false"></label>
+      <label>Gain antenne émission (dBi)<input id="r-gtx" value="35" autocomplete="off" spellcheck="false"></label>
+      <label>Gain antenne réception (dBi)<input id="r-grx" value="35" autocomplete="off" spellcheck="false"></label>
+      <label>Pertes câbles et connecteurs (dB)<input id="r-loss" value="3" autocomplete="off" spellcheck="false"></label>
+      <label>Autres pertes : atmosphère, pluie (dB)<input id="r-oth" value="2" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p id="r-err" role="alert"></p>
+    <div id="r-out"></div>
   </section>
 </main>
 
@@ -216,6 +287,176 @@ function calculate() {
   });
   $('chips').appendChild(b);
 });
+
+// Convertisseur : quatre champs liés (décimal, binaire, hexadécimal, IPv4)
+const conv = {
+  dec: { el: $('c-dec'), parse: s => /^\d+$/.test(s.trim()) ? Number(s) : null },
+  bin: { el: $('c-bin'), parse: s => { s = s.replace(/[\s.]/g, ''); return /^[01]+$/.test(s) ? parseInt(s, 2) : null; } },
+  hex: { el: $('c-hex'), parse: s => { s = s.replace(/^0x/i, '').replace(/[\s:.]/g, ''); return /^[0-9a-fA-F]+$/.test(s) ? parseInt(s, 16) : null; } },
+  ip:  { el: $('c-ip'),  parse: s => parseIP(s) },
+};
+
+// Les formats d’affichage : binaire groupé par octets, hexa sur 8 chiffres
+const show = {
+  dec: n => String(n),
+  bin: n => n.toString(2).padStart(32, '0').match(/.{8}/g).join('.'),
+  hex: n => n.toString(16).toUpperCase().padStart(8, '0'),
+  ip:  n => toIP(n),
+};
+
+Object.keys(conv).forEach(key => {
+  conv[key].el.addEventListener('input', () => {
+    const text = conv[key].el.value;
+    const err = $('c-err');
+    if (text.trim() === '') {
+      err.textContent = '';
+      Object.keys(conv).forEach(k => { if (k !== key) conv[k].el.value = ''; });
+      return;
+    }
+    const n = conv[key].parse(text);
+    if (n === null || !Number.isSafeInteger(n) || n > 0xFFFFFFFF) {
+      err.textContent = 'Valeur invalide ou supérieure à 32 bits. Vérifiez le format du champ modifié.';
+      return;
+    }
+    err.textContent = '';
+    // On met à jour tous les champs sauf celui que l’utilisateur est en train de taper
+    Object.keys(conv).forEach(k => { if (k !== key) conv[k].el.value = show[k](n); });
+  });
+});
+
+// Valeurs de départ : 192.168.1.10
+Object.keys(conv).forEach(k => { conv[k].el.value = show[k](0xC0A8010A); });
+
+// VLSM : découpe un réseau en sous-réseaux de tailles différentes
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function vlsm() {
+  const out = $('v-out'), err = $('v-err');
+  out.innerHTML = '';
+  err.textContent = '';
+  const parts = $('v-net').value.split('/');
+  const base = parseIP(parts[0]);
+  const cidr = parts.length === 2 ? parseMask(parts[1]) : null;
+  if (base === null || cidr === null || cidr > 30) {
+    err.textContent = 'Réseau invalide : écrivez par exemple 192.168.10.0/24 (CIDR de 0 à 30).';
+    return;
+  }
+  const mask = cidr === 0 ? 0 : (0xFFFFFFFF << (32 - cidr)) >>> 0;
+  const start = (base & mask) >>> 0;
+  const end = (start | ((~mask) >>> 0)) >>> 0;
+
+  // Lecture des lignes : « Nom 50 » devient { name: 'Nom', hosts: 50 }
+  const lines = $('v-req').value.split('\n').map(l => l.trim()).filter(Boolean);
+  const reqs = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(.*?)[\s:;=,-]*(\d+)$/);
+    if (!m || Number(m[2]) < 1) {
+      err.textContent = `Ligne ${i + 1} invalide : écrivez un nom puis le nombre d’hôtes (au moins 1), par exemple « Administration 50 ».`;
+      return;
+    }
+    reqs.push({ name: m[1].trim() || `Sous-réseau ${i + 1}`, hosts: Number(m[2]) });
+  }
+  if (!reqs.length) { err.textContent = 'Ajoutez au moins un sous-réseau, un par ligne.'; return; }
+
+  // Règle d’or du VLSM : on place d’abord les plus grands besoins
+  reqs.sort((a, b) => b.hosts - a.hosts);
+
+  let ptr = start, html = '';
+  for (const r of reqs) {
+    // Nombre de bits hôtes : le plus petit bloc qui contient les hôtes + réseau + broadcast
+    let bits = 2;
+    while (2 ** bits - 2 < r.hosts) bits++;
+    const size = 2 ** bits;
+    if (bits > 32 || ptr + size - 1 > end) {
+      err.textContent = `Espace insuffisant : « ${r.name} » (${fmt(r.hosts)} hôtes) ne tient plus dans ${toIP(start)}/${cidr}.`;
+      break;
+    }
+    const c = 32 - bits;
+    const m = bits >= 32 ? 0 : (0xFFFFFFFF << bits) >>> 0;
+    const last = ptr + size - 1;
+    html += `<div class="res">` +
+      `<div class="kv"><span>${esc(r.name)}</span><b>${toIP(ptr)}/${c}</b></div>` +
+      `<div class="kv"><span>Masque</span><b>${toIP(m)}</b></div>` +
+      `<div class="kv"><span>Plage utilisable</span><b>${toIP(ptr + 1)} à ${toIP(last - 1)}</b></div>` +
+      `<div class="kv"><span>Broadcast</span><b>${toIP(last)}</b></div>` +
+      `<div class="kv"><span>Hôtes utilisables / demandés</span><b>${fmt(size - 2)} / ${fmt(r.hosts)}</b></div></div>`;
+    ptr += size;   // le bloc suivant commence juste après
+  }
+  out.innerHTML = html;
+  if (!err.textContent && ptr <= end) {
+    out.innerHTML += `<p class="note">Adresses encore libres : ${fmt(end - ptr + 1)}, à partir de ${toIP(ptr)}. Les besoins sont triés du plus grand au plus petit pour que les blocs ne se chevauchent pas.</p>`;
+  }
+}
+
+$('v-net').addEventListener('input', vlsm);
+$('v-req').addEventListener('input', vlsm);
+vlsm();
+
+// Bilans de liaison : lecture d’un nombre (virgule ou point acceptés)
+const num = id => parseFloat($(id).value.replace(',', '.'));
+const r1 = x => (Math.round(x * 10) / 10).toLocaleString('fr-FR');
+const kvs = rows => '<div class="res">' + rows.map(r => `<div class="kv"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('') + '</div>';
+
+function fibre() {
+  const [ptx, sens, len, att, spl, con, mrg] = ['f-ptx', 'f-sens', 'f-len', 'f-att', 'f-spl', 'f-con', 'f-mrg'].map(num);
+  const err = $('f-err'), out = $('f-out');
+  if ([ptx, sens, len, att, spl, con, mrg].some(Number.isNaN) || len < 0 || att < 0 || spl < 0 || con < 0) {
+    err.textContent = 'Remplissez tous les champs avec des nombres (longueur, atténuation et quantités ne peuvent pas être négatives).';
+    out.innerHTML = '';
+    return;
+  }
+  err.textContent = '';
+  const lFib = len * att, lSpl = spl * 0.1, lCon = con * 0.5;
+  const total = lFib + lSpl + lCon;
+  const prx = ptx - total;          // puissance reçue = émission - pertes
+  const marge = prx - sens;         // ce qu’il reste au-dessus de la sensibilité
+  const net = marge - mrg;          // après la marge de sécurité
+  const dmax = att > 0 ? (ptx - sens - mrg - lSpl - lCon) / att : null;
+  const ok = net >= 0;
+  out.innerHTML = kvs([
+    ['Perte de la fibre', r1(lFib) + ' dB'],
+    ['Pertes épissures et connecteurs', r1(lSpl + lCon) + ' dB'],
+    ['Perte totale', r1(total) + ' dB'],
+    ['Puissance reçue', r1(prx) + ' dBm'],
+    ['Marge disponible', r1(marge) + ' dB'],
+    ['Marge après sécurité', r1(net) + ' dB'],
+    ['Distance maximale estimée', dmax !== null && dmax >= 0 ? r1(dmax) + ' km' : 'Impossible'],
+  ]) + `<p class="note verdict ${ok ? 'ok' : 'ko'}">` + (ok
+    ? `Bilan valide : il reste ${r1(net)} dB de marge après la marge de sécurité.`
+    : `Bilan insuffisant : il manque ${r1(-net)} dB. Réduisez la distance, les épissures ou les connecteurs, ou choisissez un émetteur plus puissant ou un récepteur plus sensible.`) + '</p>';
+}
+
+function radio() {
+  const [f, d, ptx, gtx, grx, loss, oth, sens] = ['r-f', 'r-d', 'r-ptx', 'r-gtx', 'r-grx', 'r-loss', 'r-oth', 'r-sens'].map(num);
+  const err = $('r-err'), out = $('r-out');
+  if ([f, d, ptx, gtx, grx, loss, oth, sens].some(Number.isNaN) || f <= 0 || d <= 0) {
+    err.textContent = 'Remplissez tous les champs avec des nombres (fréquence et distance doivent être supérieures à 0).';
+    out.innerHTML = '';
+    return;
+  }
+  err.textContent = '';
+  const fspl = 92.45 + 20 * Math.log10(f) + 20 * Math.log10(d);   // affaiblissement en espace libre
+  const prx = ptx + gtx + grx - fspl - loss - oth;
+  const fade = prx - sens;                                         // marge d’évanouissement
+  const fres = 17.32 * Math.sqrt(d / (4 * f));                     // rayon 1re zone de Fresnel, à mi-parcours (m)
+  const [cls, txt] = fade < 0 ? ['ko', 'Liaison impossible : la puissance reçue est sous la sensibilité.']
+    : fade < 10 ? ['ko', 'Marge insuffisante : la moindre variation coupera la liaison.']
+    : fade < 20 ? ['mid', 'Marge limite : prévoyez plus de gain ou une distance plus courte.']
+    : ['ok', 'Marge correcte pour un calcul en espace libre.'];
+  out.innerHTML = kvs([
+    ['Affaiblissement en espace libre', r1(fspl) + ' dB'],
+    ['Puissance reçue', r1(prx) + ' dBm'],
+    ['Marge d’évanouissement', r1(fade) + ' dB'],
+    ['Rayon de Fresnel (mi-parcours)', r1(fres) + ' m'],
+    ['Dégagement conseillé (60 %)', r1(fres * 0.6) + ' m'],
+  ]) + `<p class="note verdict ${cls}">${txt}</p>`;
+}
+
+document.querySelectorAll('#fibre input').forEach(el => el.addEventListener('input', fibre));
+$('f-wl').addEventListener('change', () => { $('f-att').value = $('f-wl').value; fibre(); });
+document.querySelectorAll('#radio input').forEach(el => el.addEventListener('input', radio));
+fibre();
+radio();
 
 $('ip').addEventListener('input', calculate);
 $('mask').addEventListener('input', calculate);
