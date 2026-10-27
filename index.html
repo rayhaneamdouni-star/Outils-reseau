@@ -83,7 +83,7 @@ select{font:600 1rem "IBM Plex Mono",ui-monospace,Consolas,monospace;padding:10p
 select:focus-visible{outline:2px solid var(--net);outline-offset:1px}
 @media (min-width:480px){.cfields.g2{grid-template-columns:1fr 1fr}}
 h3{font-size:1.05rem;margin:22px 0 8px;font-weight:600}
-#f-err,#r-err,#d-err{color:var(--err);min-height:1.5em;margin:8px 0}
+#f-err,#r-err,#d-err,#w-err{color:var(--err);min-height:1.5em;margin:8px 0}
 .verdict{font-weight:600}.ok{color:var(--net)}.ko{color:var(--err)}.mid{color:var(--host)}
 </style>
 </head>
@@ -188,6 +188,26 @@ Liaison WAN 2</textarea></label>
     </div>
     <p id="d-err" role="alert"></p>
     <div id="d-out"></div>
+  </section>
+  <section class="conv" id="wifi">
+    <h2>Bilan Wi-Fi : portée estimée</h2>
+    <p class="lead">Estimation en espace libre avec pertes d’obstacles moyennes : cloison légère 3 dB, mur béton ou brique 10 dB, plancher 15 dB. Les valeurs réelles varient selon les matériaux. La puissance autorisée (PIRE) est limitée par la réglementation locale.</p>
+    <div class="cfields g2">
+      <label>Bande<select id="w-band"><option value="2.44">2,4 GHz</option><option value="5.5">5 GHz</option><option value="6">6 GHz</option></select></label>
+      <label>Puissance d’émission (dBm)<input id="w-ptx" value="20" autocomplete="off" spellcheck="false"></label>
+      <label>Gain antenne du point d’accès (dBi)<input id="w-gtx" value="3" autocomplete="off" spellcheck="false"></label>
+      <label>Gain antenne du client (dBi)<input id="w-grx" value="0" autocomplete="off" spellcheck="false"></label>
+      <label>Pertes câbles et connecteurs (dB)<input id="w-cab" value="0" autocomplete="off" spellcheck="false"></label>
+      <label>Débit visé (remplit la sensibilité)<select id="w-pre"><option value="-82">Débit minimal (≈ −82 dBm)</option><option value="-72">Débit moyen (≈ −72 dBm)</option><option value="-65">Débit élevé (≈ −65 dBm)</option></select></label>
+      <label>Sensibilité du client (dBm)<input id="w-sens" value="-82" autocomplete="off" spellcheck="false"></label>
+      <label>Distance testée (m)<input id="w-d" value="30" autocomplete="off" spellcheck="false"></label>
+      <label>Cloisons légères<input id="w-n1" value="2" autocomplete="off" spellcheck="false"></label>
+      <label>Murs béton ou brique<input id="w-n2" value="1" autocomplete="off" spellcheck="false"></label>
+      <label>Planchers<input id="w-n3" value="0" autocomplete="off" spellcheck="false"></label>
+      <label>Marge de sécurité (dB)<input id="w-mrg" value="10" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p id="w-err" role="alert"></p>
+    <div id="w-out"></div>
   </section>
 </main>
 
@@ -531,6 +551,41 @@ $('d-gain').addEventListener('input', level);
 $('d-dbm').dispatchEvent(new Event('input'));
 $('d-db').dispatchEvent(new Event('input'));
 level();
+
+// Bilan Wi-Fi : niveau reçu à une distance donnée et portée maximale
+function wifi() {
+  const v = ['w-band', 'w-ptx', 'w-gtx', 'w-grx', 'w-cab', 'w-sens', 'w-d', 'w-n1', 'w-n2', 'w-n3', 'w-mrg'].map(num);
+  const [f, ptx, gtx, grx, cab, sens, d, n1, n2, n3, mrg] = v;
+  const err = $('w-err'), out = $('w-out');
+  if (v.some(Number.isNaN) || d <= 0 || n1 < 0 || n2 < 0 || n3 < 0) {
+    err.textContent = 'Remplissez tous les champs avec des nombres (distance supérieure à 0, quantités non négatives).';
+    out.innerHTML = '';
+    return;
+  }
+  err.textContent = '';
+  const obst = n1 * 3 + n2 * 10 + n3 * 15;                        // pertes des obstacles (dB)
+  const fixe = ptx + gtx + grx - cab - obst;                      // puissance utile avant la distance
+  const fspl = 92.45 + 20 * Math.log10(f) + 20 * Math.log10(d / 1000);
+  const prx = fixe - fspl;                                        // niveau reçu estimé
+  const marge = prx - sens - mrg;
+  const a = fixe - sens - mrg;                                    // affaiblissement admissible
+  const dmax = 10 ** ((a - 92.45 - 20 * Math.log10(f)) / 20) * 1000;   // portée maximale (m)
+  const portee = dmax < 1 ? 'Moins de 1 m' : dmax >= 1000 ? r1(dmax / 1000) + ' km' : Math.round(dmax) + ' m';
+  const ok = marge >= 0;
+  out.innerHTML = kvs([
+    ['Pertes des obstacles', r1(obst) + ' dB'],
+    ['Affaiblissement en espace libre', r1(fspl) + ' dB'],
+    ['Niveau reçu estimé', r1(prx) + ' dBm'],
+    ['Marge restante', r1(marge) + ' dB'],
+    ['Portée maximale estimée', portee],
+  ]) + `<p class="note verdict ${ok ? 'ok' : 'ko'}">` + (ok
+    ? `À ${r1(d)} m, le signal est suffisant : il reste ${r1(marge)} dB de marge.`
+    : `À ${r1(d)} m, il manque ${r1(-marge)} dB. Rapprochez l’appareil, retirez un obstacle ou utilisez une antenne à plus fort gain.`) + '</p>';
+}
+document.querySelectorAll('#wifi input').forEach(el => el.addEventListener('input', wifi));
+$('w-band').addEventListener('change', wifi);
+$('w-pre').addEventListener('change', () => { $('w-sens').value = $('w-pre').value; wifi(); });
+wifi();
 
 $('ip').addEventListener('input', calculate);
 $('mask').addEventListener('input', calculate);
