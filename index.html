@@ -83,7 +83,7 @@ select{font:600 1rem "IBM Plex Mono",ui-monospace,Consolas,monospace;padding:10p
 select:focus-visible{outline:2px solid var(--net);outline-offset:1px}
 @media (min-width:480px){.cfields.g2{grid-template-columns:1fr 1fr}}
 h3{font-size:1.05rem;margin:22px 0 8px;font-weight:600}
-#f-err,#r-err,#d-err,#w-err{color:var(--err);min-height:1.5em;margin:8px 0}
+#f-err,#r-err,#d-err,#w-err,#k-e1,#k-e2{color:var(--err);min-height:1.5em;margin:8px 0}
 .verdict{font-weight:600}.ok{color:var(--net)}.ko{color:var(--err)}.mid{color:var(--host)}
 </style>
 </head>
@@ -208,6 +208,29 @@ Liaison WAN 2</textarea></label>
     </div>
     <p id="w-err" role="alert"></p>
     <div id="w-out"></div>
+  </section>
+  <section class="conv" id="capa">
+    <h2>Capacité et débit utile</h2>
+    <p class="lead">Estimations théoriques : le débit réel dépend du protocole, des interférences et de la qualité du signal.</p>
+    <h3>Limite de Shannon</h3>
+    <div class="cfields g2">
+      <label>Bande passante (MHz)<input id="k-b" value="20" autocomplete="off" spellcheck="false"></label>
+      <label>Rapport signal/bruit SNR (dB)<input id="k-snr" value="25" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p id="k-e1" role="alert"></p>
+    <div id="k-out1"></div>
+    <h3>Débit utile et nombre de canaux</h3>
+    <div class="cfields g2">
+      <label>Bande totale disponible (MHz)<input id="k-tot" value="80" autocomplete="off" spellcheck="false"></label>
+      <label>Largeur d’un canal (MHz)<input id="k-w" value="20" autocomplete="off" spellcheck="false"></label>
+      <label>Bande de garde entre canaux (MHz)<input id="k-g" value="0" autocomplete="off" spellcheck="false"></label>
+      <label>Modulation<select id="k-mod"><option value="1">BPSK (1 bit/symbole)</option><option value="2">QPSK (2)</option><option value="4">16-QAM (4)</option><option value="6" selected>64-QAM (6)</option><option value="8">256-QAM (8)</option><option value="10">1024-QAM (10)</option><option value="12">4096-QAM (12)</option></select></label>
+      <label>Taux de codage<select id="k-rate"><option value="0.5">1/2</option><option value="0.666667">2/3</option><option value="0.75" selected>3/4</option><option value="0.833333">5/6</option><option value="1">1 (sans codage)</option></select></label>
+      <label>Flux ou porteuses parallèles (MIMO)<input id="k-flux" value="2" autocomplete="off" spellcheck="false"></label>
+      <label>Surcoût protocolaire (%)<input id="k-ov" value="25" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p id="k-e2" role="alert"></p>
+    <div id="k-out2"></div>
   </section>
 </main>
 
@@ -586,6 +609,60 @@ document.querySelectorAll('#wifi input').forEach(el => el.addEventListener('inpu
 $('w-band').addEventListener('change', wifi);
 $('w-pre').addEventListener('change', () => { $('w-sens').value = $('w-pre').value; wifi(); });
 wifi();
+
+// Capacité : limite de Shannon, puis débit utile et nombre de canaux
+const r2 = x => (Math.round(x * 100) / 100).toLocaleString('fr-FR');
+const deb = m => m >= 1000 ? r2(m / 1000) + ' Gbit/s' : r1(m) + ' Mbit/s';
+
+function shannon() {
+  const b = num('k-b'), snr = num('k-snr'), err = $('k-e1'), out = $('k-out1');
+  if (Number.isNaN(b) || Number.isNaN(snr) || b <= 0) {
+    err.textContent = 'Entrez la bande passante (supérieure à 0) et le SNR en dB.';
+    out.innerHTML = '';
+    return;
+  }
+  err.textContent = '';
+  const eff = Math.log2(1 + 10 ** (snr / 10));   // C = B × log2(1 + SNR), le SNR en rapport simple
+  out.innerHTML = kvs([
+    ['Efficacité spectrale maximale', r2(eff) + ' bit/s/Hz'],
+    ['Capacité théorique maximale', deb(b * eff)],
+  ]) + '<p class="note">C’est une limite théorique, jamais atteinte exactement en pratique.</p>';
+}
+
+function debit() {
+  const v = ['k-tot', 'k-w', 'k-g', 'k-mod', 'k-rate', 'k-flux', 'k-ov'].map(num);
+  const [tot, w, g, bits, rate, flux, ov] = v;
+  const err = $('k-e2'), out = $('k-out2');
+  if (v.some(Number.isNaN) || tot <= 0 || w <= 0 || g < 0 || flux < 1 || ov < 0 || ov >= 100) {
+    err.textContent = 'Vérifiez les champs : largeurs supérieures à 0, au moins 1 flux, surcoût entre 0 et 99 %.';
+    out.innerHTML = '';
+    return;
+  }
+  const nb = Math.floor((tot + g) / (w + g));      // combien de canaux (plus leurs gardes) tiennent dans la bande
+  if (nb < 1) {
+    err.textContent = 'Un canal est plus large que la bande disponible.';
+    out.innerHTML = '';
+    return;
+  }
+  err.textContent = '';
+  const brut = w * bits * rate * flux;             // Mbit/s par canal
+  const utile = brut * (1 - ov / 100);
+  const total = utile * nb;
+  out.innerHTML = kvs([
+    ['Canaux utilisables', String(nb)],
+    ['Spectre occupé', r1(nb * w + (nb - 1) * g) + ' MHz'],
+    ['Débit brut par canal', deb(brut)],
+    ['Débit utile par canal', deb(utile)],
+    ['Débit utile total', deb(total)],
+    ['Soit environ', r1(total / 8) + ' Mo/s'],
+    ['Efficacité spectrale utile', r2(utile / w) + ' bit/s/Hz'],
+  ]);
+}
+
+function capa() { shannon(); debit(); }
+document.querySelectorAll('#capa input').forEach(el => el.addEventListener('input', capa));
+document.querySelectorAll('#capa select').forEach(el => el.addEventListener('change', capa));
+capa();
 
 $('ip').addEventListener('input', calculate);
 $('mask').addEventListener('input', calculate);
