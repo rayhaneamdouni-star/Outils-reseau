@@ -83,6 +83,14 @@ select{font:600 1rem "IBM Plex Mono",ui-monospace,Consolas,monospace;padding:10p
 select:focus-visible{outline:2px solid var(--net);outline-offset:1px}
 @media (min-width:480px){.cfields.g2{grid-template-columns:1fr 1fr}}
 h3{font-size:1.05rem;margin:22px 0 8px;font-weight:600}
+.btn{font:600 1rem "IBM Plex Sans",system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:var(--net);color:var(--surface);cursor:pointer;margin-top:12px}
+.btn:focus-visible,.qopt:focus-visible{outline:2px solid var(--net);outline-offset:2px}
+.qprog{color:var(--muted);font-size:.9rem;margin:18px 0 4px}
+.qq{font-size:1.15rem;font-weight:600;line-height:1.35;margin:4px 0 10px}
+.qopt{display:block;width:100%;text-align:left;font:600 1rem "IBM Plex Mono",ui-monospace,Consolas,monospace;padding:12px 14px;margin:8px 0;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer}
+.qopt:disabled{color:var(--ink);opacity:1;cursor:default}
+.qopt.good{border-color:var(--net);background:var(--net-bg)}
+.qopt.bad{border-color:var(--err)}
 #f-err,#r-err,#d-err,#w-err,#k-e1,#k-e2{color:var(--err);min-height:1.5em;margin:8px 0}
 .verdict{font-weight:600}.ok{color:var(--net)}.ko{color:var(--err)}.mid{color:var(--host)}
 </style>
@@ -231,6 +239,15 @@ Liaison WAN 2</textarea></label>
     </div>
     <p id="k-e2" role="alert"></p>
     <div id="k-out2"></div>
+  </section>
+  <section class="conv" id="quiz">
+    <h2>Quiz CCNA : sous-réseaux</h2>
+    <p class="lead">Dix questions générées au hasard, avec la correction expliquée après chaque réponse. Aucun score n’est enregistré.</p>
+    <div class="cfields g2">
+      <label>Niveau<select id="q-lvl"><option value="facile">Facile (/24 à /30)</option><option value="moyen" selected>Moyen (/16 à /30)</option><option value="difficile">Difficile (/8 à /30)</option></select></label>
+    </div>
+    <button type="button" class="btn" id="q-restart">Nouveau quiz</button>
+    <div id="q-box"></div>
   </section>
 </main>
 
@@ -663,6 +680,109 @@ function capa() { shannon(); debit(); }
 document.querySelectorAll('#capa input').forEach(el => el.addEventListener('input', capa));
 document.querySelectorAll('#capa select').forEach(el => el.addEventListener('change', capa));
 capa();
+
+// Quiz CCNA : questions de sous-réseaux générées au hasard
+const maskOf = c => c === 0 ? 0 : (0xFFFFFFFF << (32 - c)) >>> 0;
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = rnd(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+const LEVELS = { facile: [24, 30], moyen: [16, 30], difficile: [8, 30] };
+
+// Adresse IP aléatoire dans les plages privées habituelles
+function randIP() {
+  const t = rnd(0, 2);
+  if (t === 0) return ((10 << 24) | (rnd(0, 255) << 16) | (rnd(0, 255) << 8) | rnd(1, 254)) >>> 0;
+  if (t === 1) return ((172 << 24) | (rnd(16, 31) << 16) | (rnd(0, 255) << 8) | rnd(1, 254)) >>> 0;
+  return ((192 << 24) | (168 << 16) | (rnd(0, 255) << 8) | rnd(1, 254)) >>> 0;
+}
+
+// Mélange la bonne réponse avec 3 mauvaises réponses plausibles, sans doublon
+function choices(correct, cands) {
+  const wrong = shuffle([...new Set(cands.filter(x => x !== correct))]);
+  const opts = shuffle([correct, ...wrong.slice(0, 3)]);
+  return { opts, ans: opts.indexOf(correct) };
+}
+
+function makeQuestion(lo, hi) {
+  const kind = rnd(0, 6);
+  const c = rnd(lo, hi), mask = maskOf(c), size = 2 ** (32 - c);
+  const ip = randIP(), net = (ip & mask) >>> 0, bc = (net | ((~mask) >>> 0)) >>> 0;
+  const ips = list => list.filter(x => x >= 0 && x <= 0xFFFFFFFF).map(toIP);
+  const around = list => list.filter(k => k >= 1 && k <= 31);
+  if (kind === 0) return { q: `Quelle est l’adresse réseau de ${toIP(ip)}/${c} ?`,
+    ...choices(toIP(net), ips([net + size, net - size, net + 2 * size, ip, bc, net + 1])),
+    e: `On applique un ET logique entre l’adresse et le masque ${toIP(mask)} : les bits hôtes passent à 0. Taille du bloc : ${fmt(size)} adresses, donc le réseau est ${toIP(net)}/${c}.` };
+  if (kind === 1) return { q: `Quelle est l’adresse de broadcast de ${toIP(ip)}/${c} ?`,
+    ...choices(toIP(bc), ips([bc + size, bc - size, net, bc - 1, bc + 1, net + size])),
+    e: `Le broadcast met tous les bits hôtes à 1. Le réseau est ${toIP(net)}, la taille du bloc ${fmt(size)} : le broadcast est la dernière adresse du bloc, ${toIP(bc)}.` };
+  if (kind === 2) {
+    const h = 32 - c, good = 2 ** h - 2;
+    const ch = choices(good, [2 ** h, 2 ** h - 1, 2 ** (h + 1) - 2, 2 ** (h - 1) - 2, 2 ** h - 4, 2 ** (h + 1)].filter(x => x >= 0));
+    return { q: `Combien d’hôtes utilisables contient un réseau /${c} ?`, opts: ch.opts.map(fmt), ans: ch.ans,
+      e: `Il reste 32 − ${c} = ${h} bits hôtes. 2^${h} = ${fmt(2 ** h)} adresses, moins l’adresse réseau et le broadcast : ${fmt(good)} hôtes utilisables.` };
+  }
+  if (kind === 3) return { q: `Quel est le masque de sous-réseau correspondant à /${c} ?`,
+    ...choices(toIP(mask), around([c - 3, c - 2, c - 1, c + 1, c + 2, c + 3]).map(k => toIP(maskOf(k)))),
+    e: `/${c} signifie ${c} bits à 1 suivis de ${32 - c} bits à 0, ce qui donne ${toIP(mask)}.` };
+  if (kind === 4) return { q: `Quel est le CIDR du masque ${toIP(mask)} ?`,
+    ...choices('/' + c, around([c - 3, c - 2, c - 1, c + 1, c + 2, c + 3]).map(k => '/' + k)),
+    e: `Le masque ${toIP(mask)} contient ${c} bits à 1 consécutifs : c’est /${c}.` };
+  if (kind === 5) return { q: `Quelle est la première adresse utilisable de ${toIP(ip)}/${c} ?`,
+    ...choices(toIP(net + 1), ips([net, net + 2, bc, bc - 1, net + size + 1])),
+    e: `La première adresse utilisable suit l’adresse réseau ${toIP(net)} : c’est ${toIP(net + 1)}.` };
+  // kind 6 : nombre de sous-réseaux
+  const n = rnd(Math.max(lo, 10), hi), d = rnd(2, Math.min(6, n - 8)), b = n - d;
+  const good = 2 ** d;
+  const ch = choices(good, [2 ** (d + 1), 2 ** (d - 1), 2 * d, good - 2, good + 2, 2 ** (d + 2)]);
+  return { q: `En découpant un réseau /${b} en sous-réseaux /${n}, combien de sous-réseaux obtient-on ?`, opts: ch.opts.map(fmt), ans: ch.ans,
+    e: `On emprunte ${n} − ${b} = ${d} bits. Chaque bit emprunté double le nombre de sous-réseaux : 2^${d} = ${good}.` };
+}
+
+let QZ = null;
+function quizStart() {
+  const [lo, hi] = LEVELS[$('q-lvl').value];
+  QZ = { list: Array.from({ length: 10 }, () => makeQuestion(lo, hi)), i: 0, score: 0 };
+  quizShow();
+}
+
+function quizShow() {
+  const box = $('q-box'), n = QZ.list.length;
+  if (QZ.i >= n) {
+    const s = QZ.score;
+    const msg = s >= 9 ? 'Excellent : vous maîtrisez les sous-réseaux.'
+      : s >= 7 ? 'Très bien : encore un peu d’entraînement.'
+      : s >= 5 ? 'Correct : revoyez la méthode du bloc (taille = 2^bits hôtes).'
+      : 'À retravailler : refaites un quiz en niveau facile.';
+    box.innerHTML = `<p class="qq">Résultat : ${s} sur ${n}</p><p class="note verdict ${s >= 7 ? 'ok' : 'mid'}">${msg}</p><button type="button" class="btn" id="q-again">Nouveau quiz</button>`;
+    $('q-again').addEventListener('click', quizStart);
+    return;
+  }
+  const q = QZ.list[QZ.i];
+  box.innerHTML = `<p class="qprog">Question ${QZ.i + 1} sur ${n} · Score : ${QZ.score}</p><p class="qq">${q.q}</p>`
+    + q.opts.map((o, k) => `<button type="button" class="qopt" data-k="${k}">${o}</button>`).join('')
+    + '<div id="q-fb"></div>';
+  box.querySelectorAll('.qopt').forEach(b => b.addEventListener('click', () => quizAnswer(+b.dataset.k)));
+}
+
+function quizAnswer(k) {
+  const q = QZ.list[QZ.i];
+  if (q.done) return;
+  q.done = true;
+  const good = k === q.ans;
+  if (good) QZ.score++;
+  document.querySelectorAll('#q-box .qopt').forEach((b, j) => {
+    b.disabled = true;
+    if (j === q.ans) { b.classList.add('good'); b.textContent = '✓ ' + b.textContent; }
+    else if (j === k) { b.classList.add('bad'); b.textContent = '✗ ' + b.textContent; }
+  });
+  const last = QZ.i === QZ.list.length - 1;
+  $('q-fb').innerHTML = `<p class="note verdict ${good ? 'ok' : 'ko'}">${good ? 'Bonne réponse.' : 'Mauvaise réponse.'}</p><p class="note">${q.e}</p>`
+    + `<button type="button" class="btn" id="q-next">${last ? 'Voir le résultat' : 'Question suivante'}</button>`;
+  $('q-next').addEventListener('click', () => { QZ.i++; quizShow(); });
+}
+
+$('q-restart').addEventListener('click', quizStart);
+$('q-lvl').addEventListener('change', quizStart);
+quizStart();
 
 $('ip').addEventListener('input', calculate);
 $('mask').addEventListener('input', calculate);
