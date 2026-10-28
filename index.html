@@ -107,6 +107,11 @@ h3{font-size:1.05rem;margin:22px 0 8px;font-weight:600}
   #fiche h2,#fiche label{color:#000}
   #fiche input,#fiche textarea,#fiche select{border:1px solid #888;background:#fff;color:#000;box-shadow:none}
 }
+details{border:1.5px solid var(--line);border-radius:10px;background:var(--surface);padding:0 14px;margin:10px 0}
+summary{cursor:pointer;font-weight:600;padding:12px 0}
+details[open] summary{border-bottom:1px solid var(--line);margin-bottom:10px}
+details p{margin:6px 0}
+details .btn,.exbtn{margin:8px 0 14px}
 #langbar{display:flex;gap:6px;margin:0 0 10px}
 #langbar button{font:600 .8rem "IBM Plex Sans",system-ui,sans-serif;padding:4px 12px;border:1.5px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);cursor:pointer}
 #langbar button[aria-pressed="true"]{background:var(--net);color:var(--surface);border-color:var(--net)}
@@ -320,6 +325,11 @@ Liaison WAN 2</textarea></label>
       <button type="button" class="btn alt" id="fi-del">Supprimer cette fiche</button>
     </div>
     <p id="fs-msg" class="noprint"></p>
+  </section>
+  <section class="conv tool" id="guide">
+    <h2>Guide d’utilisation</h2>
+    <p class="lead">Touchez un outil pour voir à quoi il sert, comment l’utiliser et un exemple prêt à essayer.</p>
+    <div id="guide-list"></div>
   </section>
 </main>
 
@@ -1000,6 +1010,7 @@ try { initFiche(); } catch (e) { console.error('Fiche d’intervention :', e); }
 
 // Accueil et menu : un seul outil affiché à la fois
 const TOOLS = [
+  ['guide', 'Guide d’utilisation', 'Comment utiliser chaque outil, avec exemples'],
   ['t-subnet', 'Sous-réseaux', 'Réseau, broadcast, hôtes, binaire'],
   ['t-conv', 'Convertisseur', 'Décimal, binaire, hexa, IPv4'],
   ['t-vlsm', 'VLSM', 'Découper un réseau'],
@@ -1046,6 +1057,123 @@ function initMenu() {
   showTool(fromHash());
 }
 try { initMenu(); } catch (e) { console.error('Menu :', e); }
+
+// Guide d’utilisation : à quoi ça sert, comment faire, exemple, et bouton « Essayer »
+const GUIDE = [
+ [
+  "t-subnet",
+  "Trouver le réseau, le broadcast et le nombre d’hôtes d’une adresse IP.",
+  "Tapez l’adresse et le masque (/24 ou 255.255.255.0). Les résultats se mettent à jour seuls.",
+  "192.168.10.130/26 : le réseau est 192.168.10.128 et il y a 62 hôtes utilisables.",
+  {
+   "ip": "192.168.10.130",
+   "mask": "/26"
+  }
+ ],
+ [
+  "t-conv",
+  "Passer d’un format à l’autre : décimal, binaire, hexadécimal, adresse IPv4.",
+  "Modifiez l’un des quatre champs : les trois autres suivent.",
+  "255.255.255.0 en IPv4 donne FFFFFF00 en hexadécimal.",
+  {
+   "c-ip": "255.255.255.0"
+  }
+ ],
+ [
+  "t-vlsm",
+  "Découper un réseau en sous-réseaux de tailles différentes.",
+  "Entrez le réseau de départ, puis une ligne par sous-réseau : un nom suivi du nombre d’hôtes.",
+  "192.168.10.0/24 avec Administration 50, Invités 25, Serveurs 10 et Liaison WAN 2 : quatre sous-réseaux, du /26 au /30.",
+  {
+   "v-net": "192.168.10.0/24",
+   "v-req": "Administration 50\nInvités 25\nServeurs 10\nLiaison WAN 2"
+  }
+ ],
+ [
+  "fibre",
+  "Vérifier qu’une liaison en fibre optique a assez de signal.",
+  "Entrez les puissances, la longueur, les épissures et les connecteurs. Le verdict indique la marge.",
+  "20 km à 1310 nm avec 6 épissures : le bilan reste valide.",
+  {
+   "f-len": "20",
+   "f-spl": "6"
+  }
+ ],
+ [
+  "radio",
+  "Vérifier une liaison radio ou un faisceau hertzien et le dégagement nécessaire.",
+  "Entrez la fréquence, la distance, les gains d’antennes et les pertes. Lisez la marge d’évanouissement.",
+  "15 GHz sur 25 km : la marge d’évanouissement est d’environ 21 dB, ce qui est correct.",
+  {
+   "r-d": "25"
+  }
+ ],
+ [
+  "wifi",
+  "Estimer jusqu’où le Wi-Fi porte, selon la puissance, les antennes et les murs.",
+  "Choisissez la bande, indiquez la distance et le nombre d’obstacles.",
+  "À 100 m avec 2 cloisons et 1 mur béton, il manque environ 1,2 dB : rapprochez l’appareil.",
+  {
+   "w-d": "100"
+  }
+ ],
+ [
+  "dbm",
+  "Convertir des puissances et calculer un gain ou une perte en dB.",
+  "Modifiez dBm, mW ou W : les autres champs suivent. Pour un gain, ajoutez-le au niveau d’entrée.",
+  "30 dBm correspondent à 1000 mW, soit 1 W.",
+  {
+   "d-dbm": "30"
+  }
+ ],
+ [
+  "capa",
+  "Estimer le débit utile et le nombre de canaux d’une liaison.",
+  "Indiquez la bande, la largeur de canal, la modulation et le surcoût.",
+  "160 MHz en canaux de 40 MHz : 4 canaux et environ 1,08 Gbit/s au total.",
+  {
+   "k-tot": "160",
+   "k-w": "40"
+  }
+ ],
+ [
+  "quiz",
+  "S’entraîner aux sous-réseaux avec des questions corrigées.",
+  "Choisissez un niveau, répondez, puis lisez l’explication après chaque question.",
+  "Commencez par le niveau Facile, puis passez au niveau Moyen.",
+  null
+ ],
+ [
+  "fiche",
+  "Remplir un rapport d’intervention sur le terrain et l’enregistrer en PDF.",
+  "Remplissez les champs, ajoutez des photos et la signature du client, puis touchez « Enregistrer en PDF ».",
+  "Créez une fiche par intervention : elles restent sur votre téléphone.",
+  null
+ ]
+];
+const EXAMPLES = {"t-subnet": {"ip": "192.168.10.130", "mask": "/26"}, "t-conv": {"c-ip": "255.255.255.0"}, "t-vlsm": {"v-net": "192.168.10.0/24", "v-req": "Administration 50\nInvités 25\nServeurs 10\nLiaison WAN 2"}, "fibre": {"f-len": "20", "f-spl": "6"}, "radio": {"r-d": "25"}, "wifi": {"w-d": "100"}, "dbm": {"d-dbm": "30"}, "capa": {"k-tot": "160", "k-w": "40"}};
+function initGuide() {
+  const fill = ex => Object.entries(ex).forEach(([id, v]) => { const el = $(id); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  const button = (id, label, className) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = className; b.textContent = label;
+    b.addEventListener('click', () => { if (EXAMPLES[id]) fill(EXAMPLES[id]); location.hash = id; });
+    return b;
+  };
+  GUIDE.forEach(([id, what, how, ex]) => {
+    const d = document.createElement('details'), s = document.createElement('summary');
+    s.textContent = TOOLS.find(t => t[0] === id)[1];
+    d.appendChild(s);
+    [['À quoi ça sert :', what], ['Comment faire :', how], ['Exemple :', ex]].forEach(([h, t]) => {
+      const p = document.createElement('p'), b = document.createElement('b');
+      b.textContent = h; p.append(b, ' ' + t); d.appendChild(p);
+    });
+    d.appendChild(button(id, EXAMPLES[id] ? 'Essayer cet exemple' : 'Ouvrir l’outil', 'btn alt'));
+    $('guide-list').appendChild(d);
+    if (EXAMPLES[id]) document.querySelector('#' + id + ' h2').insertAdjacentElement('afterend', button(id, 'Essayer cet exemple', 'btn alt exbtn'));
+  });
+}
+try { initGuide(); } catch (e) { console.error('Guide :', e); }
 
 // Langues : le français est la langue d’origine ; les autres sont traduites à la volée
 function initLang() {
